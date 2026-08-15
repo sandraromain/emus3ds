@@ -651,3 +651,24 @@ diff --git a/src/3ds/3dsmain.h b/src/3ds/3dsmain.h
 
 
  extern char romFileNameFullPath[];
+diff --git a/src/cores/picodrive/3ds/3dsimpl.cpp b/src/cores/picodrive/3ds/3dsimpl.cpp
+--- a/src/cores/picodrive/3ds/3dsimpl.cpp
++++ b/src/cores/picodrive/3ds/3dsimpl.cpp
+@@ -687,7 +687,7 @@ void setSampleRate(bool preserveState)
+
+ 	// compute a sample rate closes to 30000 kHz for old 3DS, and 44100 Khz for new 3DS.
+ 	//
+-    u8 new3DS = false;
++    bool new3DS = false;
+     APT_CheckNew3DS(&new3DS);
+     if (new3DS)
+         sampleRate = 44100;
+@@ -1329,7 +1329,7 @@
+
+ 	// compute a sample rate closes to 30000 kHz for old 3DS, and 44100 Khz for new 3DS.
+ 	//
+-    u8 new3DS = false;
++    bool new3DS = false;
+     APT_CheckNew3DS(&new3DS);
+     PicoIn.lowPassFilter = 0;
+     if (settings3DS.OtherOptions[SETTINGS_LOWPASSFILTER])
