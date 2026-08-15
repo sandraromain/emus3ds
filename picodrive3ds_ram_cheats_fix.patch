@@ -38,7 +38,7 @@ index b836fd4..0000000 100644
        /* code length */
        len = 11;
      }
-@@ -272,10 +280,16 @@ u32 decode_cheat(char *string, int index)
+@@ -272,9 +280,16 @@ u32 decode_cheat(char *string, int index)
      /* update cheat address & data values */
      cheatlist[index].address = address;
      cheatlist[index].data = data;
