@@ -161,10 +161,10 @@ jobs:
 
       - name: Verify diagnostic binary
         run: |
-          NM="$DEVKITARM/bin/arm-none-eabi-nm"
-          "$NM" -C picodrive_3ds.elf | grep "video3dsClearAllSoftwareBuffers"
-          "$NM" -C picodrive_3ds.elf | grep "emuDebugStage"
-          "$NM" -C picodrive_3ds.elf | grep "svcExitProcess"
+          "$DEVKITARM/bin/arm-none-eabi-nm" -C picodrive_3ds.elf | grep "video3dsClearAllSoftwareBuffers"
+          strings picodrive_3ds.elf | grep "DBG1 before sound"
+          strings picodrive_3ds.elf | grep "DBG frame %d before core"
+          echo "Diagnostic strings found"
 
       - name: Collect build output
         run: |
@@ -177,6 +177,6 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-runtime-diagnostic-v19b
+          name: picodrive3ds-runtime-diagnostic-v19c
           path: artifacts/*
           if-no-files-found: error
