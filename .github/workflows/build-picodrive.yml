@@ -23,160 +23,169 @@ jobs:
           git apply --check picodrive3ds_ram_cheats_fix.patch
           git apply picodrive3ds_ram_cheats_fix.patch
 
-      - name: Apply v20 silent diagnostics
+      - name: Apply v20b silent diagnostics
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # Keep the v18 fix for video3dsClearAllSoftwareBuffers().
+          # Keep the v18 fix.
           header = Path("src/3ds/3dsvideo.h")
           source = Path("src/3ds/3dsvideo.cpp")
           h = header.read_text()
           s = source.read_text()
+
           old_decl = "void *video3dsClearAllSoftwareBuffers();"
           old_def = "void *video3dsClearAllSoftwareBuffers()"
           if old_decl not in h or old_def not in s:
-              raise SystemExit("Expected v18 signatures were not found")
-          header.write_text(h.replace(old_decl, "void video3dsClearAllSoftwareBuffers();", 1))
-          source.write_text(s.replace(old_def, "void video3dsClearAllSoftwareBuffers()", 1))
+              raise SystemExit("Expected v18 video clear signatures were not found")
 
-          # Bypass legacy CSND completely. The previous hardware test stopped at
-          # DBG1 before sound, so snd3dsStartPlaying() never returned.
-          sound_path = Path("src/3ds/3dssound.cpp")
-          snd = sound_path.read_text()
-          init_marker = "bool snd3dsInitialize()\\n{\\n"
-          init_replacement = (
-              "bool snd3dsInitialize()\\n"
-              "{\\n"
-              "    // v20 diagnostic: do not initialize legacy CSND.\\n"
-              "    snd3DS.isPlaying = false;\\n"
-              "    snd3DS.audioType = 0;\\n"
-              "    snd3DS.fullBuffers = NULL;\\n"
-              "    snd3DS.leftBuffer = NULL;\\n"
-              "    snd3DS.rightBuffer = NULL;\\n"
-              "    snd3DS.mixingThreadHandle = 0;\\n"
-              "    snd3DS.terminateMixingThread = true;\\n"
-              "    snd3dsSpawnMixingThread = false;\\n"
-              "    return true;\\n"
-              "\\n"
-          )
-          if init_marker not in snd:
-              raise SystemExit("Could not find snd3dsInitialize()")
-          snd = snd.replace(init_marker, init_replacement, 1)
-          sound_path.write_text(snd)
+          header.write_text(h.replace(
+              old_decl,
+              "void video3dsClearAllSoftwareBuffers();",
+              1
+          ))
+          source.write_text(s.replace(
+              old_def,
+              "void video3dsClearAllSoftwareBuffers()",
+              1
+          ))
 
           main_path = Path("src/3ds/3dsmain.cpp")
           m = main_path.read_text()
 
-          # Placement-new is used only to make the global fileList destructor safe
-          # when returning normally from main().
-          include_marker = "#include <vector>\\n"
+          include_marker = "#include <vector>\n"
           if include_marker not in m:
               raise SystemExit("Could not find vector include")
-          m = m.replace(include_marker, include_marker + "#include <new>\\n", 1)
+          m = m.replace(include_marker, include_marker + "#include <new>\n", 1)
 
-          globals_marker = "char romFileNameLastSelected[_MAX_PATH];\\n\\n\\n\\n"
+          globals_marker = "char romFileNameLastSelected[_MAX_PATH];\n\n\n\n"
           debug_helper = (
-              "char romFileNameLastSelected[_MAX_PATH];\\n"
-              "\\n"
-              "static void emuDebugStage(const char *text)\\n"
-              "{\\n"
-              "    printf(\\\"\\\\x1b[20;0H%-38s\\\", text);\\n"
-              "    u8 *fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);\\n"
-              "    if (fb)\\n"
-              "        GSPGPU_FlushDataCache(fb, 320 * 240 * 4);\\n"
-              "    svcSleepThread(10000000);\\n"
-              "}\\n"
-              "\\n"
-              "\\n"
+              "char romFileNameLastSelected[_MAX_PATH];\n"
+              "\n"
+              "static void emuDebugStage(const char *text)\n"
+              "{\n"
+              "    printf(\"\\x1b[20;0H%-38s\", text);\n"
+              "    u8 *fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);\n"
+              "    if (fb)\n"
+              "        GSPGPU_FlushDataCache(fb, 320 * 240 * 4);\n"
+              "    svcSleepThread(10000000);\n"
+              "}\n"
+              "\n"
+              "\n"
           )
           if globals_marker not in m:
               raise SystemExit("Could not find globals insertion point")
           m = m.replace(globals_marker, debug_helper, 1)
 
           start_marker = (
-              "    snd3dsStartPlaying();\\n"
-              "\\n"
-              "    impl3dsEmulationBegin();\\n"
-              "\\n"
-              "\\twhile (true)\\n"
-              "\\t{\\n"
+              "    snd3dsStartPlaying();\n"
+              "\n"
+              "    impl3dsEmulationBegin();\n"
+              "\n"
+              "\twhile (true)\n"
+              "\t{\n"
           )
           start_replacement = (
-              "    emuDebugStage(\\\"DBG1 sound bypassed\\\");\\n"
-              "\\n"
-              "    emuDebugStage(\\\"DBG2 before emu begin\\\");\\n"
-              "    impl3dsEmulationBegin();\\n"
-              "    emuDebugStage(\\\"DBG3 emu begin done\\\");\\n"
-              "\\n"
-              "    int debugFrameCounter = 0;\\n"
-              "\\n"
-              "\\twhile (true)\\n"
-              "\\t{\\n"
-              "        debugFrameCounter++;\\n"
-              "        if (debugFrameCounter <= 3)\\n"
-              "        {\\n"
-              "            char dbg[40];\\n"
-              "            snprintf(dbg, sizeof(dbg), \\\"DBG frame %d loop start\\\", debugFrameCounter);\\n"
-              "            emuDebugStage(dbg);\\n"
-              "        }\\n"
+              "    emuDebugStage(\"DBG1 sound bypassed\");\n"
+              "\n"
+              "    emuDebugStage(\"DBG2 before emu begin\");\n"
+              "    impl3dsEmulationBegin();\n"
+              "    emuDebugStage(\"DBG3 emu begin done\");\n"
+              "\n"
+              "    int debugFrameCounter = 0;\n"
+              "\n"
+              "\twhile (true)\n"
+              "\t{\n"
+              "        debugFrameCounter++;\n"
+              "        if (debugFrameCounter <= 3)\n"
+              "        {\n"
+              "            char dbg[40];\n"
+              "            snprintf(dbg, sizeof(dbg), \"DBG frame %d loop start\", debugFrameCounter);\n"
+              "            emuDebugStage(dbg);\n"
+              "        }\n"
           )
           if start_marker not in m:
-              raise SystemExit("Could not find emulatorLoop start")
+              raise SystemExit("Could not find emulatorLoop start insertion point")
           m = m.replace(start_marker, start_replacement, 1)
 
           frame_marker = (
-              "        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);\\n"
-              "\\n"
-              "        firstFrame = false; \\n"
+              "        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);\n"
+              "\n"
+              "        firstFrame = false; \n"
           )
           frame_replacement = (
-              "        if (debugFrameCounter <= 3)\\n"
-              "        {\\n"
-              "            char dbg[40];\\n"
-              "            snprintf(dbg, sizeof(dbg), \\\"DBG frame %d before core\\\", debugFrameCounter);\\n"
-              "            emuDebugStage(dbg);\\n"
-              "        }\\n"
-              "\\n"
-              "        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);\\n"
-              "\\n"
-              "        if (debugFrameCounter <= 3)\\n"
-              "        {\\n"
-              "            char dbg[40];\\n"
-              "            snprintf(dbg, sizeof(dbg), \\\"DBG frame %d core done\\\", debugFrameCounter);\\n"
-              "            emuDebugStage(dbg);\\n"
-              "        }\\n"
-              "\\n"
-              "        firstFrame = false; \\n"
+              "        if (debugFrameCounter <= 3)\n"
+              "        {\n"
+              "            char dbg[40];\n"
+              "            snprintf(dbg, sizeof(dbg), \"DBG frame %d before core\", debugFrameCounter);\n"
+              "            emuDebugStage(dbg);\n"
+              "        }\n"
+              "\n"
+              "        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);\n"
+              "\n"
+              "        if (debugFrameCounter <= 3)\n"
+              "        {\n"
+              "            char dbg[40];\n"
+              "            snprintf(dbg, sizeof(dbg), \"DBG frame %d core done\", debugFrameCounter);\n"
+              "            emuDebugStage(dbg);\n"
+              "        }\n"
+              "\n"
+              "        firstFrame = false; \n"
           )
           if frame_marker not in m:
-              raise SystemExit("Could not find frame insertion point")
+              raise SystemExit("Could not find frame diagnostic insertion point")
           m = m.replace(frame_marker, frame_replacement, 1)
 
-          # Restore a normal main() return rather than svcExitProcess(). Rebuild
-          # fileList in-place as an empty vector first so its old storage is
-          # intentionally leaked and the CRT destructor has nothing to free.
           exit_marker = (
-              "    printf (\\\"Exiting...\\\\n\\\");\\n"
-              "\\texit(0);\\n"
+              "    printf (\"Exiting...\\n\");\n"
+              "\texit(0);\n"
               "}"
           )
           exit_replacement = (
-              "    new (&fileList) std::vector<std::string>();\\n"
-              "    printf (\\\"Exiting...\\\\n\\\");\\n"
-              "    return 0;\\n"
+              "    new (&fileList) std::vector<std::string>();\n"
+              "    printf (\"Exiting...\\n\");\n"
+              "    return 0;\n"
               "}"
           )
           if exit_marker not in m:
-              raise SystemExit("Could not find original exit block")
+              raise SystemExit("Could not find final exit(0) block")
           m = m.replace(exit_marker, exit_replacement, 1)
 
           main_path.write_text(m)
 
-          print("Applied v18 video return fix")
-          print("Bypassed legacy CSND")
-          print("Added v20 DBG markers")
-          print("Changed exit path to placement-new fileList + return 0")
+          # Completely disable the legacy CSND backend for this diagnostic build.
+          # Use string offsets instead of newline-sensitive exact matching.
+          sound_path = Path("src/3ds/3dssound.cpp")
+          snd = sound_path.read_text()
+          fn = "bool snd3dsInitialize()"
+          pos = snd.find(fn)
+          if pos < 0:
+              raise SystemExit("Could not locate snd3dsInitialize")
+          brace = snd.find("{", pos + len(fn))
+          if brace < 0:
+              raise SystemExit("Could not locate snd3dsInitialize opening brace")
+
+          nl = chr(10)
+          body = nl.join([
+              "",
+              "    // v20b diagnostic: legacy CSND disabled.",
+              "    snd3DS.isPlaying = false;",
+              "    snd3DS.audioType = 0;",
+              "    snd3DS.fullBuffers = NULL;",
+              "    snd3DS.leftBuffer = NULL;",
+              "    snd3DS.rightBuffer = NULL;",
+              "    snd3DS.mixingThreadHandle = 0;",
+              "    snd3DS.terminateMixingThread = true;",
+              "    snd3dsSpawnMixingThread = false;",
+              "    return true;",
+              "",
+          ])
+          snd = snd[:brace + 1] + body + snd[brace + 1:]
+          sound_path.write_text(snd)
+
+          print("Applied v18 clear-return fix")
+          print("Added runtime DBG markers and bypassed legacy CSND")
+          print("Changed final exit to placement-new fileList + return 0")
           PY
 
       - name: Build PicoDrive
@@ -184,14 +193,14 @@ jobs:
           chmod +x makerom/linux_x86_64/makerom || true
           make -f picodrive-make
 
-      - name: Verify v20 source changes
+      - name: Verify diagnostic binary
         run: |
           "$DEVKITARM/bin/arm-none-eabi-nm" -C picodrive_3ds.elf | grep "video3dsClearAllSoftwareBuffers"
           grep -q "DBG1 sound bypassed" src/3ds/3dsmain.cpp
           grep -q "DBG frame %d before core" src/3ds/3dsmain.cpp
-          grep -q "v20 diagnostic: do not initialize legacy CSND" src/3ds/3dssound.cpp
-          grep -q "new (&fileList) std::vector<std::string>();" src/3ds/3dsmain.cpp
-          echo "v20 source changes verified"
+          grep -q "v20b diagnostic: legacy CSND disabled" src/3ds/3dssound.cpp
+          grep -Fq 'new (&fileList) std::vector<std::string>();' src/3ds/3dsmain.cpp
+          echo "v20b source modifications verified"
 
       - name: Collect build output
         run: |
@@ -204,6 +213,6 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-silent-diagnostic-v20
+          name: picodrive3ds-silent-diagnostic-v20b
           path: artifacts/*
           if-no-files-found: error
