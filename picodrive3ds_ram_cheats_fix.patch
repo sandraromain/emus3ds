@@ -715,3 +715,25 @@ diff --git a/src/cores/picodrive/3ds/3dsimpl.cpp b/src/cores/picodrive/3ds/3dsim
      APT_CheckNew3DS(&new3DS);
      PicoIn.lowPassFilter = 0;
      if (settings3DS.OtherOptions[SETTINGS_LOWPASSFILTER])
+diff --git a/src/cores/picodrive/3ds/3dsimpl.cpp b/src/cores/picodrive/3ds/3dsimpl.cpp
+--- a/src/cores/picodrive/3ds/3dsimpl.cpp
++++ b/src/cores/picodrive/3ds/3dsimpl.cpp
+@@ -538,14 +538,10 @@ bool impl3dsInitializeCore()
+     printf("IsReal3DS: %d\n", emulator.isReal3DS);
+ #endif
+
+-    if (hack3dsInitializeSvcHack())
+-    {
+-        if (hack3dsTestDynamicRecompilation())
+-        {
+-            ctr_svchack_successful = 1;
+-            PicoIn.opt |= POPT_EN_DRC;
+-        }
+-    }
++    // The legacy SVC/dynarec hack is not safe with modern Luma/libctru.
++    // Use the portable memory paths and keep dynamic recompilation disabled.
++    ctr_svchack_successful = 0;
++    PicoIn.opt &= ~POPT_EN_DRC;
+
+     return true;
+ }
