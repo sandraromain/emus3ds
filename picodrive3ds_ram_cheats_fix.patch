@@ -102,3 +102,15 @@ diff --git a/picodrive-make b/picodrive-make
 
  CXXFLAGS	:= $(CFLAGS)  -fno-exceptions -std=gnu++11
 
+diff --git a/src/3ds/3dsfiles.h b/src/3ds/3dsfiles.h
+--- a/src/3ds/3dsfiles.h
++++ b/src/3ds/3dsfiles.h
+@@ -7,6 +7,8 @@
+ #include <cstring>
+ #include <cstdlib>
+ #include <ctime>
++#include <cctype>
++#include <string>
+ #include <vector>
+ 
+ //----------------------------------------------------------------------
