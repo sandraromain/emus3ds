@@ -63,6 +63,23 @@ jobs:
           s = s.replace(needle, addition, 1)
           path.write_text(s)
 
+          # pico.c contains one 3DS-specific Cyclone-only fix that was left
+          # outside of an EMU_C68K guard in the original source.  Guard it
+          # so the same source can be compiled with FAME.
+          pico_path = Path("src/cores/picodrive/pico/pico.c")
+          pico = pico_path.read_text()
+          cyclone_reset_fix = "  PicoCpuCS68k.jumptab = &CycloneJumpTab;\n"
+          if cyclone_reset_fix not in pico:
+              raise SystemExit("Expected Cyclone slave jump-table line was not found")
+          pico = pico.replace(
+              cyclone_reset_fix,
+              "#ifdef EMU_C68K\n"
+              + cyclone_reset_fix
+              + "#endif\n",
+              1,
+          )
+          pico_path.write_text(pico)
+
           print("Switched from Cyclone to FAME 68000 core")
           print("Cyclone source entries remaining:",
                 sum("cpu/cyclone/" in line for line in s.splitlines()))
@@ -96,6 +113,6 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-fame-diagnostic
+          name: picodrive3ds-fame-diagnostic-v17
           path: artifacts/*
           if-no-files-found: error
