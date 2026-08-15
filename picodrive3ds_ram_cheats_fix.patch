@@ -1,0 +1,80 @@
+diff --git a/src/cores/picodrive/3ds/cheats.c b/src/cores/picodrive/3ds/cheats.c
+index b836fd4..0000000 100644
+--- a/src/cores/picodrive/3ds/cheats.c
++++ b/src/cores/picodrive/3ds/cheats.c
+@@ -42,6 +42,7 @@ typedef struct
+   char code[12];
+   char text[MAX_DESC_LENGTH];
+   u8 enable;
++  u8 data_size;
+   u16 data;
+   u16 old;
+   u32 address;
+@@ -67,6 +68,7 @@ u32 decode_cheat(char *string, int index)
+   u32 address = 0;
+   u16 data = 0;
+   u8 ref = 0;
++  u8 data_size = 1;
+
+   /* 16-bit Game Genie code (ABCD-EFGH) */
+   if ((strlen(string) >= 9) && (string[4] == '-'))
+@@ -122,6 +124,9 @@ u32 decode_cheat(char *string, int index)
+       }
+     }
+
++    /* Mega Drive / Genesis Game Genie codes patch 16-bit words. */
++    data_size = 2;
++
+     /* code length */
+     len = 9;
+   }
+@@ -221,6 +226,9 @@ u32 decode_cheat(char *string, int index)
+         data |= (n << ((3 - i) * 4));
+       }
+
++      /* AAAAAA:DDDD is a 16-bit Action Replay code. */
++      data_size = 2;
++
+       /* code length */
+       len = 11;
+     }
+@@ -272,10 +280,16 @@ u32 decode_cheat(char *string, int index)
+     /* update cheat address & data values */
+     cheatlist[index].address = address;
+     cheatlist[index].data = data;
++    cheatlist[index].data_size = data_size;
+
+-    if (!(PicoIn.AHW & PAHW_SMS))
+-      cheatlist[index].old = *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE));
++    /*
++     * Only ROM cheats have an original value in Pico.rom.
++     * Work RAM cheats use addresses in the 0xFF0000 range and must not be
++     * dereferenced relative to Pico.rom.
++     */
++    if (!(PicoIn.AHW & PAHW_SMS) && cheatlist[index].address < Pico.romsize)
++      cheatlist[index].old =
++        *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE));
+
+     maxcheats++;
+   }
+@@ -290,7 +304,10 @@ u32 enable_cheat(int index, u8 enable)
+     {
+       if (!(PicoIn.AHW & PAHW_SMS))
+       {
+-        *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE)) = cheatlist[index].old;
++        /* RAM cheats are disabled by no longer applying them each frame. */
++        if (cheatlist[index].address < Pico.romsize)
++          *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE)) =
++            cheatlist[index].old;
+       }
+       else
+       {
+@@ -420,7 +437,7 @@ void RAMCheatUpdate(void)
+     index = cheatIndexes[--cnt];
+
+     /* apply RAM patch */
+-    if (cheatlist[index].data & 0xFF00)
++    if (cheatlist[index].data_size == 2)
+     {
+       /* word patch */
+       *(u16 *)(PicoMem.zram + (cheatlist[index].address & 0xFFFE)) = cheatlist[index].data;
