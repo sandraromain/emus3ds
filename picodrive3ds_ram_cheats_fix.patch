@@ -654,8 +654,11 @@ diff --git a/src/3ds/3dsmain.h b/src/3ds/3dsmain.h
 diff --git a/src/3ds/3dssound.cpp b/src/3ds/3dssound.cpp
 --- a/src/3ds/3dssound.cpp
 +++ b/src/3ds/3dssound.cpp
-@@ -386,13 +386,7 @@ bool snd3dsInitialize()
-
+@@ -383,17 +383,11 @@
+ 
+     // SNES DSP thread
+     snd3DS.terminateMixingThread = false;
+ 
      if (emulator.isReal3DS)
      {
 -#ifdef LIBCTRU_1_0_0
@@ -665,6 +668,7 @@ diff --git a/src/3ds/3dssound.cpp b/src/3ds/3dssound.cpp
 -#else
 -        APT_SetAppCpuTimeLimit(30); // enables syscore usage
 -#endif
-
+ 
          snd3DS.mixingThreadHandle = NULL;
-
+ 
+         if (snd3dsSpawnMixingThread)
