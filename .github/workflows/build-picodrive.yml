@@ -18,15 +18,72 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply RAM cheat patch
+      - name: Apply cumulative PicoDrive patch
         run: |
           git apply --check picodrive3ds_ram_cheats_fix.patch
           git apply picodrive3ds_ram_cheats_fix.patch
+
+      - name: Switch 68000 core to FAME
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("picodrive-make")
+          s = path.read_text()
+
+          if "-DEMU_C68K" not in s:
+              raise SystemExit("Expected EMU_C68K build flag was not found")
+
+          s = s.replace("-DEMU_C68K", "-DEMU_F68K", 1)
+
+          lines = s.splitlines()
+          lines = [
+              line for line in lines
+              if "src/cores/picodrive/cpu/cyclone/*.s" not in line
+              and "src/cores/picodrive/cpu/cyclone/tools/*.s" not in line
+              and "src/cores/picodrive/cpu/cyclone/*.c" not in line
+          ]
+          s = "\n".join(lines) + "\n"
+
+          needle = (
+              "\t\t\t\t$(foreach file,$(notdir "
+              "$(wildcard src/cores/picodrive/cpu/*.c)),"
+              "\t\t\t\tcores/picodrive/cpu/$(file)) \\\n"
+          )
+          addition = (
+              needle
+              + "\t\t\t\t$(foreach file,$(notdir "
+              "$(wildcard src/cores/picodrive/cpu/fame/*.c)),"
+              "\t\t\tcores/picodrive/cpu/fame/$(file)) \\\n"
+          )
+
+          if needle not in s:
+              raise SystemExit("Could not find CPU CFILES insertion point")
+
+          s = s.replace(needle, addition, 1)
+          path.write_text(s)
+
+          print("Switched from Cyclone to FAME 68000 core")
+          print("Cyclone source entries remaining:",
+                sum("cpu/cyclone/" in line for line in s.splitlines()))
+          print("FAME source entries:",
+                sum("cpu/fame/" in line for line in s.splitlines()))
+          PY
 
       - name: Build PicoDrive
         run: |
           chmod +x makerom/linux_x86_64/makerom || true
           make -f picodrive-make
+
+      - name: Verify FAME core
+        run: |
+          echo "FAME symbols:"
+          arm-none-eabi-nm -C picodrive_3ds.elf | grep -E "fm68k_(reset|emulate|init)" || true
+          echo "Cyclone reset symbol should be absent:"
+          if arm-none-eabi-nm -C picodrive_3ds.elf | grep -q "CycloneResetJT"; then
+            echo "ERROR: CycloneResetJT is still linked"
+            exit 1
+          fi
 
       - name: Collect build output
         run: |
@@ -39,6 +96,6 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-ram-cheats-fix
+          name: picodrive3ds-fame-diagnostic
           path: artifacts/*
           if-no-files-found: error
