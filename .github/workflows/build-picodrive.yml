@@ -23,68 +23,32 @@ jobs:
           git apply --check picodrive3ds_ram_cheats_fix.patch
           git apply picodrive3ds_ram_cheats_fix.patch
 
-      - name: Switch 68000 core to FAME
+      - name: Fix software-buffer clear return type
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("picodrive-make")
-          s = path.read_text()
+          header = Path("src/3ds/3dsvideo.h")
+          source = Path("src/3ds/3dsvideo.cpp")
 
-          if "-DEMU_C68K" not in s:
-              raise SystemExit("Expected EMU_C68K build flag was not found")
+          h = header.read_text()
+          s = source.read_text()
 
-          s = s.replace("-DEMU_C68K", "-DEMU_F68K", 1)
+          old_decl = "void *video3dsClearAllSoftwareBuffers();"
+          new_decl = "void video3dsClearAllSoftwareBuffers();"
 
-          lines = s.splitlines()
-          lines = [
-              line for line in lines
-              if "src/cores/picodrive/cpu/cyclone/*.s" not in line
-              and "src/cores/picodrive/cpu/cyclone/tools/*.s" not in line
-              and "src/cores/picodrive/cpu/cyclone/*.c" not in line
-          ]
-          s = "\n".join(lines) + "\n"
+          old_def = "void *video3dsClearAllSoftwareBuffers()"
+          new_def = "void video3dsClearAllSoftwareBuffers()"
 
-          needle = (
-              "\t\t\t\t$(foreach file,$(notdir "
-              "$(wildcard src/cores/picodrive/cpu/*.c)),"
-              "\t\t\t\tcores/picodrive/cpu/$(file)) \\\n"
-          )
-          addition = (
-              needle
-              + "\t\t\t\t$(foreach file,$(notdir "
-              "$(wildcard src/cores/picodrive/cpu/fame/*.c)),"
-              "\t\t\tcores/picodrive/cpu/fame/$(file)) \\\n"
-          )
+          if old_decl not in h:
+              raise SystemExit("Expected declaration was not found in 3dsvideo.h")
+          if old_def not in s:
+              raise SystemExit("Expected definition was not found in 3dsvideo.cpp")
 
-          if needle not in s:
-              raise SystemExit("Could not find CPU CFILES insertion point")
+          header.write_text(h.replace(old_decl, new_decl, 1))
+          source.write_text(s.replace(old_def, new_def, 1))
 
-          s = s.replace(needle, addition, 1)
-          path.write_text(s)
-
-          # pico.c contains one 3DS-specific Cyclone-only fix that was left
-          # outside of an EMU_C68K guard in the original source.  Guard it
-          # so the same source can be compiled with FAME.
-          pico_path = Path("src/cores/picodrive/pico/pico.c")
-          pico = pico_path.read_text()
-          cyclone_reset_fix = "  PicoCpuCS68k.jumptab = &CycloneJumpTab;\n"
-          if cyclone_reset_fix not in pico:
-              raise SystemExit("Expected Cyclone slave jump-table line was not found")
-          pico = pico.replace(
-              cyclone_reset_fix,
-              "#ifdef EMU_C68K\n"
-              + cyclone_reset_fix
-              + "#endif\n",
-              1,
-          )
-          pico_path.write_text(pico)
-
-          print("Switched from Cyclone to FAME 68000 core")
-          print("Cyclone source entries remaining:",
-                sum("cpu/cyclone/" in line for line in s.splitlines()))
-          print("FAME source entries:",
-                sum("cpu/fame/" in line for line in s.splitlines()))
+          print("Changed video3dsClearAllSoftwareBuffers return type from void* to void")
           PY
 
       - name: Build PicoDrive
@@ -92,15 +56,12 @@ jobs:
           chmod +x makerom/linux_x86_64/makerom || true
           make -f picodrive-make
 
-      - name: Verify FAME core
+      - name: Verify clear function has a real return
         run: |
-          echo "FAME symbols:"
-          arm-none-eabi-nm -C picodrive_3ds.elf | grep -E "fm68k_(reset|emulate|init)" || true
-          echo "Cyclone reset symbol should be absent:"
-          if arm-none-eabi-nm -C picodrive_3ds.elf | grep -q "CycloneResetJT"; then
-            echo "ERROR: CycloneResetJT is still linked"
-            exit 1
-          fi
+          SYM=$("$DEVKITARM/bin/arm-none-eabi-nm" -n -C picodrive_3ds.elf | \
+            awk '/video3dsClearAllSoftwareBuffers/ {print "0x"$1; exit}')
+          echo "video3dsClearAllSoftwareBuffers = $SYM"
+          test -n "$SYM"
 
       - name: Collect build output
         run: |
@@ -113,6 +74,6 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-fame-diagnostic-v17
+          name: picodrive3ds-video-return-fix-v18
           path: artifacts/*
           if-no-files-found: error
