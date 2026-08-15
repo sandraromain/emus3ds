@@ -639,3 +639,15 @@ diff --git a/src/3ds/3dsgpu.cpp b/src/3ds/3dsgpu.cpp
 +    isNew3DS = emus3dsCheckNew3DS();
  
      gfxOldTopRightFramebuffers[0] = gfxTopRightFramebuffers[0];
+diff --git a/src/3ds/3dsmain.h b/src/3ds/3dsmain.h
+--- a/src/3ds/3dsmain.h
++++ b/src/3ds/3dsmain.h
+@@ -1,6 +1,8 @@
+
+ #ifndef _3DSMAIN_H_
+ #define _3DSMAIN_H_
++
++#include <3ds.h>
+
+
+ extern char romFileNameFullPath[];
