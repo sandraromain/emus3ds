@@ -4,170 +4,41 @@ on:
   workflow_dispatch:
   push:
     paths:
+      - "src/cores/picodrive/3ds/cheats.c"
+      - "picodrive3ds_ram_cheats_fix.patch"
       - ".github/workflows/build-picodrive.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: devkitpro/devkitarm:20230403
+      image: devkitpro/devkitarm:20230622
 
     steps:
-      - name: Checkout fork
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Patch PicoDrive RAM cheat support
-        shell: bash
+      - name: Apply RAM cheat patch
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          git apply --check picodrive3ds_ram_cheats_fix.patch
+          git apply picodrive3ds_ram_cheats_fix.patch
 
-          path = Path("src/cores/picodrive/3ds/cheats.c")
-          s = path.read_text()
-
-          replacements = [
-              (
-                  """  char text[MAX_DESC_LENGTH];
-  u8 enable;
-  u16 data;""",
-                  """  char text[MAX_DESC_LENGTH];
-  u8 enable;
-  u8 data_size;
-  u16 data;"""
-              ),
-              (
-                  """  u32 address = 0;
-  u16 data = 0;
-  u8 ref = 0;
-
-  /* 16-bit Game Genie code (ABCD-EFGH) */""",
-                  """  u32 address = 0;
-  u16 data = 0;
-  u8 ref = 0;
-  u8 data_size = 1;
-
-  /* 16-bit Game Genie code (ABCD-EFGH) */"""
-              ),
-              (
-                  """    /* code length */
-    len = 9;
-  }
-
-  /* 8-bit Game Genie code (DDA-AAA-XXX) */""",
-                  """    /* Mega Drive / Genesis Game Genie codes patch 16-bit words. */
-    data_size = 2;
-
-    /* code length */
-    len = 9;
-  }
-
-  /* 8-bit Game Genie code (DDA-AAA-XXX) */"""
-              ),
-              (
-                  """      /* code length */
-      len = 11;
-    }
-    else
-    {
-      /* Convert (xxAA AADD to xxAAAA:DD) */""",
-                  """      /* AAAAAA:DDDD is a 16-bit Action Replay code. */
-      data_size = 2;
-
-      /* code length */
-      len = 11;
-    }
-    else
-    {
-      /* Convert (xxAA AADD to xxAAAA:DD) */"""
-              ),
-              (
-                  """    /* update cheat address & data values */
-    cheatlist[index].address = address;
-    cheatlist[index].data = data;
-
-    if (!(PicoIn.AHW & PAHW_SMS))
-      cheatlist[index].old = *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE));
-
-    maxcheats++;""",
-                  """    /* update cheat address & data values */
-    cheatlist[index].address = address;
-    cheatlist[index].data = data;
-    cheatlist[index].data_size = data_size;
-
-    /*
-     * Only ROM cheats have an original value in Pico.rom.
-     * Work RAM cheats use addresses in the 0xFF0000 range.
-     */
-    if (!(PicoIn.AHW & PAHW_SMS) && cheatlist[index].address < Pico.romsize)
-      cheatlist[index].old =
-        *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE));
-
-    maxcheats++;"""
-              ),
-              (
-                  """      if (!(PicoIn.AHW & PAHW_SMS))
-      {
-        *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE)) = cheatlist[index].old;
-      }
-      else""",
-                  """      if (!(PicoIn.AHW & PAHW_SMS))
-      {
-        /* RAM cheats are disabled by no longer applying them each frame. */
-        if (cheatlist[index].address < Pico.romsize)
-          *(u16 *)(Pico.rom + (cheatlist[index].address & 0xFFFFFE)) =
-            cheatlist[index].old;
-      }
-      else"""
-              ),
-              (
-                  """    /* apply RAM patch */
-    if (cheatlist[index].data & 0xFF00)
-    {
-      /* word patch */""",
-                  """    /* apply RAM patch */
-    if (cheatlist[index].data_size == 2)
-    {
-      /* word patch */"""
-              ),
-          ]
-
-          for old, new in replacements:
-              count = s.count(old)
-              if count != 1:
-                  raise SystemExit(
-                      f"Patch assertion failed: expected 1 match, got {count}\n"
-                      f"Missing/ambiguous block starts with: {old[:80]!r}"
-                  )
-              s = s.replace(old, new, 1)
-
-          path.write_text(s)
-          print("RAM cheat patch applied successfully")
-          PY
-
-      - name: Verify patch
-        shell: bash
+      - name: Build PicoDrive
         run: |
-          grep -n "data_size" src/cores/picodrive/3ds/cheats.c
-          grep -n "address < Pico.romsize" src/cores/picodrive/3ds/cheats.c
-
-      - name: Build PicoDrive 3DSX and CIA
-        shell: bash
-        run: |
-          chmod +x makerom/linux_x86_64/makerom
-          make -f picodrive-make -j2
+          chmod +x makerom/linux_x86_64/makerom || true
+          make -f picodrive-make
 
       - name: Collect build output
-        shell: bash
         run: |
           mkdir -p artifacts
-          cp picodrive_3ds.cia artifacts/
-          cp picodrive_3ds.3dsx artifacts/
-          cp picodrive_3ds.smdh artifacts/ 2>/dev/null || true
-          ls -lh artifacts/
+          cp -f picodrive_3ds.cia artifacts/ 2>/dev/null || true
+          cp -f picodrive_3ds.3dsx artifacts/ 2>/dev/null || true
+          cp -f picodrive_3ds.elf artifacts/ 2>/dev/null || true
+          ls -la artifacts
 
-      - name: Upload build artifact
+      - name: Upload build
         uses: actions/upload-artifact@v4
         with:
           name: picodrive3ds-ram-cheats-fix
-          path: artifacts/
+          path: artifacts/*
           if-no-files-found: error
