@@ -98,7 +98,7 @@ diff --git a/picodrive-make b/picodrive-make
  			$(ARCH)
 
 -CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS -D__GNUC__ -DUSE_FILE32API -DLIBCTRU_1_0_0 -DLSB_FIRST -DARM_ARCH
-+CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS -DUSE_FILE32API -DLIBCTRU_1_0_0 -DLSB_FIRST -DARM_ARCH
++CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS -DUSE_FILE32API -DLSB_FIRST -DARM_ARCH
 
  CXXFLAGS	:= $(CFLAGS)  -fno-exceptions -std=gnu++11
 
@@ -651,24 +651,3 @@ diff --git a/src/3ds/3dsmain.h b/src/3ds/3dsmain.h
 
 
  extern char romFileNameFullPath[];
-diff --git a/src/3ds/3dssound.cpp b/src/3ds/3dssound.cpp
---- a/src/3ds/3dssound.cpp
-+++ b/src/3ds/3dssound.cpp
-@@ -383,17 +383,11 @@
- 
-     // SNES DSP thread
-     snd3DS.terminateMixingThread = false;
- 
-     if (emulator.isReal3DS)
-     {
--#ifdef LIBCTRU_1_0_0
--        aptOpenSession();
-         APT_SetAppCpuTimeLimit(30); // enables syscore usage
--        aptCloseSession();   
--#else
--        APT_SetAppCpuTimeLimit(30); // enables syscore usage
--#endif
- 
-         snd3DS.mixingThreadHandle = NULL;
- 
-         if (snd3dsSpawnMixingThread)
