@@ -102,6 +102,21 @@ diff --git a/picodrive-make b/picodrive-make
 
  CXXFLAGS	:= $(CFLAGS)  -fno-exceptions -std=gnu++11
 
+@@ -102,4 +102,6 @@
+ 				$(foreach file,$(notdir $(wildcard src/cores/picodrive/pico/sound/*.s)),		cores/picodrive/pico/sound/$(file)) \
+ 				$(foreach file,$(notdir $(wildcard src/cores/picodrive/platform/common/*.s)),	cores/picodrive/platform/common/$(file)) \
+ 
++SFILES_UPPER	:=	cores/picodrive/pico/carthw/svp/stub_arm.S
++
+ CFILES		:=	$(foreach file,$(notdir $(wildcard src/3ds/zlib/*.c)),							3ds/zlib/$(file)) \
+@@ -146,5 +148,6 @@
+ 			$(CPPFILES:.cpp=.o) \
+ 			$(CFILES:.c=.o) \
+-			$(SFILES:.s=.o)
++			$(SFILES:.s=.o) \
++			$(SFILES_UPPER:.S=.o)
+ 
+ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 diff --git a/src/3ds/3dsfiles.h b/src/3ds/3dsfiles.h
 --- a/src/3ds/3dsfiles.h
 +++ b/src/3ds/3dsfiles.h
@@ -630,15 +645,92 @@ diff --git a/src/3ds/3dsgpu.cpp b/src/3ds/3dsgpu.cpp
  #include "3dsfiles.h"
  #include "3dsmain.h"
  #include "3dsemu.h"
-@@ -1148,7 +1149,5 @@ bool gpu3dsInitialize()
- 	gfxSet3D(true);
+@@ -24,11 +25,4 @@
+ bool somethingWasDrawn = false;
+ bool somethingWasFlushed = false;
+ 
+-extern u8* gfxTopRightFramebuffers[2];
+-extern u8* gfxTopLeftFramebuffers[2];
+-u8* gfxOldTopRightFramebuffers[2];
+-
+-extern "C" void gfxSetFramebufferInfo(gfxScreen_t screen, u8 id);
+-extern "C" void gfxWriteFramebufferInfo(gfxScreen_t screen);
+-
+ bool isNew3DS = false;
+@@ -162,35 +157,7 @@
+ float prevSliderVal = -1;
+ void gpu3dsCheckSlider()
+ {
+-    float sliderVal = *(float*)0x1FF81080;
+-
+-    if (sliderVal != prevSliderVal)
+-    {
+-        gfxTopRightFramebuffers[0] = gfxTopLeftFramebuffers[0];
+-        gfxTopRightFramebuffers[1] = gfxTopLeftFramebuffers[1];
+-
+-        if (sliderVal == 0)
+-        {
+-            gpu3dsSetParallaxBarrier(false);
+-        }
+-        else if (sliderVal < 0.3)
+-        {
+-            if (!isNew3DS)
+-            {
+-                gfxTopRightFramebuffers[0] = gfxOldTopRightFramebuffers[0];
+-                gfxTopRightFramebuffers[1] = gfxOldTopRightFramebuffers[1];
+-            }
+-            gpu3dsSetParallaxBarrier(false);
+-        }
+-        else if (sliderVal < 0.6)
+-            gpu3dsSetParallaxBarrier(false);
+-        else
+-            gpu3dsSetParallaxBarrier(true);
+-
+-        u8* fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
+-        int b = fb == gfxTopLeftFramebuffers[0] ? 0 : 1;
+-        gfxSetFramebufferInfo(GFX_TOP, b);
+-        gfxWriteFramebufferInfo(GFX_TOP);
+-    }
+-    prevSliderVal = sliderVal;
++    // Modern libctru no longer exposes the framebuffer internals used by
++    // this legacy 3D-slider code. Keep this custom build in safe 2D mode.
++    gpu3dsSetParallaxBarrier(false);
+ }
+@@ -1142,21 +1108,8 @@
+     gfxInit	(GPU3DS.screenFormat, GPU3DS.screenFormat, false);
+ 	GPU_Init(NULL);
+ 
+-	gfxSet3D(true);
++	gfxSet3D(false);
  
 -    u8 val = 0;
 -    APT_CheckNew3DS(&val);
 -    isNew3DS = (val != 0);
+-
+-    gfxOldTopRightFramebuffers[0] = gfxTopRightFramebuffers[0];
+-    gfxOldTopRightFramebuffers[1] = gfxTopRightFramebuffers[1];
+-    for (int i = 0; i < 400 * 240 * 4; i++)
+-    {
+-        gfxOldTopRightFramebuffers[0][i] = 0;
+-        gfxOldTopRightFramebuffers[1][i] = 0;
+-    }
+-
+-    gfxTopRightFramebuffers[0] = gfxTopLeftFramebuffers[0];
+-    gfxTopRightFramebuffers[1] = gfxTopLeftFramebuffers[1];
 +    isNew3DS = emus3dsCheckNew3DS();
  
-     gfxOldTopRightFramebuffers[0] = gfxTopRightFramebuffers[0];
+     // Create the frame and depth buffers for the top screen.
+@@ -1298,10 +1249,5 @@
+     printf("gfxExit:\n");
+ #endif
+ 
+-    // Restore the old frame buffers so that gfxExit can properly
+-    // free them.
+-    //
+-    gfxTopRightFramebuffers[0] = gfxOldTopRightFramebuffers[0];
+-    gfxTopRightFramebuffers[1] = gfxOldTopRightFramebuffers[1];
+ 	gfxExit();
+ }
 diff --git a/src/3ds/3dsmain.h b/src/3ds/3dsmain.h
 --- a/src/3ds/3dsmain.h
 +++ b/src/3ds/3dsmain.h
