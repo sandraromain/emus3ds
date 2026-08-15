@@ -78,3 +78,15 @@ index b836fd4..0000000 100644
      {
        /* word patch */
        *(u16 *)(PicoMem.zram + (cheatlist[index].address & 0xFFFE)) = cheatlist[index].data;
+diff --git a/src/3ds/3dsgpu.h b/src/3ds/3dsgpu.h
+--- a/src/3ds/3dsgpu.h
++++ b/src/3ds/3dsgpu.h
+@@ -61,7 +61,7 @@ typedef struct
+
+ typedef struct
+ {
+-    GSPGPU_FramebufferFormats   screenFormat;
++    GSPGPU_FramebufferFormat    screenFormat;
+     GPU_TEXCOLOR                frameBufferFormat;
+
+     u32                 *frameBuffer;
