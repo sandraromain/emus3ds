@@ -651,3 +651,20 @@ diff --git a/src/3ds/3dsmain.h b/src/3ds/3dsmain.h
 
 
  extern char romFileNameFullPath[];
+diff --git a/src/3ds/3dssound.cpp b/src/3ds/3dssound.cpp
+--- a/src/3ds/3dssound.cpp
++++ b/src/3ds/3dssound.cpp
+@@ -386,13 +386,7 @@ bool snd3dsInitialize()
+
+     if (emulator.isReal3DS)
+     {
+-#ifdef LIBCTRU_1_0_0
+-        aptOpenSession();
+         APT_SetAppCpuTimeLimit(30); // enables syscore usage
+-        aptCloseSession();   
+-#else
+-        APT_SetAppCpuTimeLimit(30); // enables syscore usage
+-#endif
+
+         snd3DS.mixingThreadHandle = NULL;
+
