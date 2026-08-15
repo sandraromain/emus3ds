@@ -28,7 +28,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Keep the v18 fix for the UB in video3dsClearAllSoftwareBuffers().
+          # Keep the v18 fix.
           header = Path("src/3ds/3dsvideo.h")
           source = Path("src/3ds/3dsvideo.cpp")
           h = header.read_text()
@@ -38,99 +38,111 @@ jobs:
           old_def = "void *video3dsClearAllSoftwareBuffers()"
           if old_decl not in h or old_def not in s:
               raise SystemExit("Expected v18 video clear signatures were not found")
-          header.write_text(h.replace(old_decl, "void video3dsClearAllSoftwareBuffers();", 1))
-          source.write_text(s.replace(old_def, "void video3dsClearAllSoftwareBuffers()", 1))
 
-          # Add small on-screen stage markers. Bottom-screen double buffering is
-          # disabled during emulation, so flushing the current bottom framebuffer
-          # makes each marker visible without a full screen swap.
+          header.write_text(h.replace(
+              old_decl,
+              "void video3dsClearAllSoftwareBuffers();",
+              1
+          ))
+          source.write_text(s.replace(
+              old_def,
+              "void video3dsClearAllSoftwareBuffers()",
+              1
+          ))
+
           main_path = Path("src/3ds/3dsmain.cpp")
           m = main_path.read_text()
 
           globals_marker = "char romFileNameLastSelected[_MAX_PATH];\n\n\n\n"
-          debug_helper = '''char romFileNameLastSelected[_MAX_PATH];
-
-static void emuDebugStage(const char *text)
-{
-    printf("\\x1b[20;0H%-38s", text);
-    u8 *fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
-    if (fb)
-        GSPGPU_FlushDataCache(fb, 320 * 240 * 4);
-    svcSleepThread(10000000);
-}
-
-
-'''
+          debug_helper = (
+              "char romFileNameLastSelected[_MAX_PATH];\n"
+              "\n"
+              "static void emuDebugStage(const char *text)\n"
+              "{\n"
+              "    printf(\"\\x1b[20;0H%-38s\", text);\n"
+              "    u8 *fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);\n"
+              "    if (fb)\n"
+              "        GSPGPU_FlushDataCache(fb, 320 * 240 * 4);\n"
+              "    svcSleepThread(10000000);\n"
+              "}\n"
+              "\n"
+              "\n"
+          )
           if globals_marker not in m:
               raise SystemExit("Could not find globals insertion point")
           m = m.replace(globals_marker, debug_helper, 1)
 
-          start_marker = '''    snd3dsStartPlaying();
-
-    impl3dsEmulationBegin();
-
-\\twhile (true)
-\\t{
-'''
-          start_replacement = '''    emuDebugStage("DBG1 before sound");
-    snd3dsStartPlaying();
-    emuDebugStage("DBG2 sound started");
-
-    emuDebugStage("DBG3 before emu begin");
-    impl3dsEmulationBegin();
-    emuDebugStage("DBG4 emu begin done");
-
-    int debugFrameCounter = 0;
-
-\\twhile (true)
-\\t{
-        debugFrameCounter++;
-        if (debugFrameCounter <= 3)
-        {
-            char dbg[40];
-            snprintf(dbg, sizeof(dbg), "DBG frame %d loop start", debugFrameCounter);
-            emuDebugStage(dbg);
-        }
-'''
+          start_marker = (
+              "    snd3dsStartPlaying();\n"
+              "\n"
+              "    impl3dsEmulationBegin();\n"
+              "\n"
+              "\twhile (true)\n"
+              "\t{\n"
+          )
+          start_replacement = (
+              "    emuDebugStage(\"DBG1 before sound\");\n"
+              "    snd3dsStartPlaying();\n"
+              "    emuDebugStage(\"DBG2 sound started\");\n"
+              "\n"
+              "    emuDebugStage(\"DBG3 before emu begin\");\n"
+              "    impl3dsEmulationBegin();\n"
+              "    emuDebugStage(\"DBG4 emu begin done\");\n"
+              "\n"
+              "    int debugFrameCounter = 0;\n"
+              "\n"
+              "\twhile (true)\n"
+              "\t{\n"
+              "        debugFrameCounter++;\n"
+              "        if (debugFrameCounter <= 3)\n"
+              "        {\n"
+              "            char dbg[40];\n"
+              "            snprintf(dbg, sizeof(dbg), \"DBG frame %d loop start\", debugFrameCounter);\n"
+              "            emuDebugStage(dbg);\n"
+              "        }\n"
+          )
           if start_marker not in m:
               raise SystemExit("Could not find emulatorLoop start insertion point")
           m = m.replace(start_marker, start_replacement, 1)
 
-          frame_marker = '''        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);
-
-        firstFrame = false; 
-'''
-          frame_replacement = '''        if (debugFrameCounter <= 3)
-        {
-            char dbg[40];
-            snprintf(dbg, sizeof(dbg), "DBG frame %d before core", debugFrameCounter);
-            emuDebugStage(dbg);
-        }
-
-        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);
-
-        if (debugFrameCounter <= 3)
-        {
-            char dbg[40];
-            snprintf(dbg, sizeof(dbg), "DBG frame %d core done", debugFrameCounter);
-            emuDebugStage(dbg);
-        }
-
-        firstFrame = false; 
-'''
+          frame_marker = (
+              "        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);\n"
+              "\n"
+              "        firstFrame = false; \n"
+          )
+          frame_replacement = (
+              "        if (debugFrameCounter <= 3)\n"
+              "        {\n"
+              "            char dbg[40];\n"
+              "            snprintf(dbg, sizeof(dbg), \"DBG frame %d before core\", debugFrameCounter);\n"
+              "            emuDebugStage(dbg);\n"
+              "        }\n"
+              "\n"
+              "        impl3dsEmulationRunOneFrame(firstFrame, skipDrawingFrame);\n"
+              "\n"
+              "        if (debugFrameCounter <= 3)\n"
+              "        {\n"
+              "            char dbg[40];\n"
+              "            snprintf(dbg, sizeof(dbg), \"DBG frame %d core done\", debugFrameCounter);\n"
+              "            emuDebugStage(dbg);\n"
+              "        }\n"
+              "\n"
+              "        firstFrame = false; \n"
+          )
           if frame_marker not in m:
               raise SystemExit("Could not find frame diagnostic insertion point")
           m = m.replace(frame_marker, frame_replacement, 1)
 
-          # The supplied exit dump shows failure in C++ global destruction after
-          # the emulator already finalized its 3DS services. At this point the
-          # process can terminate directly instead of running global destructors.
-          exit_marker = '''    printf ("Exiting...\\\\n");
-\\texit(0);
-}'''
-          exit_replacement = '''    printf ("Exiting...\\\\n");
-    svcExitProcess();
-}'''
+          exit_marker = (
+              "    printf (\"Exiting...\\n\");\n"
+              "\texit(0);\n"
+              "}"
+          )
+          exit_replacement = (
+              "    printf (\"Exiting...\\n\");\n"
+              "    svcExitProcess();\n"
+              "}"
+          )
           if exit_marker not in m:
               raise SystemExit("Could not find final exit(0) block")
           m = m.replace(exit_marker, exit_replacement, 1)
@@ -165,6 +177,6 @@ static void emuDebugStage(const char *text)
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-runtime-diagnostic-v19
+          name: picodrive3ds-runtime-diagnostic-v19b
           path: artifacts/*
           if-no-files-found: error
