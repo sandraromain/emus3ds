@@ -23,7 +23,7 @@ jobs:
           git apply --check picodrive3ds_ram_cheats_fix.patch
           git apply picodrive3ds_ram_cheats_fix.patch
 
-      - name: Apply v21 modern runtime fixes
+      - name: Apply v21b modern runtime fixes
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -281,22 +281,23 @@ jobs:
               raise SystemExit("Could not find frame call")
           m = m.replace(frame_call, frame_call + "        snd3dsMixSamples();\n", 1)
 
-          # Remove legacy service shutdown calls after gfxExit().
-          service_shutdown = re.compile(
-              r'\n#ifndef EMU_RELEASE\n\s*printf\("ptmSysmExit:\\\\n"\);\n#endif\n'
-              r'\s*ptmSysmExit \(\);'
-              r'.*?'
-              r'\n\s*srvExit\(\);',
-              re.S
-          )
-          m2, count = service_shutdown.subn(
-              '\n    // Modern libctru: gfxExit()/CRT own the remaining service shutdown.\n',
-              m,
-              count=1
-          )
-          if count != 1:
-              raise SystemExit("Could not remove legacy service shutdown block")
-          m = m2
+          # Remove the old manual service shutdown calls. The exact whitespace
+          # differs between historical source revisions, so replace the calls
+          # themselves instead of trying to match the whole block.
+          legacy_calls = [
+              "ptmSysmExit ();",
+              "hidExit();",
+              "aptExit();",
+              "srvExit();",
+          ]
+          for call in legacy_calls:
+              if call not in m:
+                  raise SystemExit("Could not find legacy shutdown call: " + call)
+              m = m.replace(
+                  call,
+                  "/* modern libctru: automatic service shutdown */",
+                  1
+              )
 
           # Return normally from main, while avoiding the known bad fileList free.
           if "#include <new>\n" not in m:
@@ -330,7 +331,7 @@ jobs:
           chmod +x makerom/linux_x86_64/makerom || true
           make -f picodrive-make
 
-      - name: Verify v21 binary and source
+      - name: Verify v21b binary and source
         run: |
           "$DEVKITARM/bin/arm-none-eabi-nm" -C picodrive_3ds.elf | grep "video3dsClearAllSoftwareBuffers"
           grep -q -- "-DEMU_RELEASE" picodrive-make
@@ -338,7 +339,7 @@ jobs:
           grep -q "NDSP_FORMAT_STEREO_PCM16" src/3ds/3dssound.cpp
           grep -q "snd3dsMixSamples();" src/3ds/3dsmain.cpp
           grep -q "Modern libctru" src/3ds/3dsmain.cpp
-          echo "v21 modern runtime fixes verified"
+          echo "v21b modern runtime fixes verified"
 
       - name: Collect build output
         run: |
@@ -351,6 +352,6 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-modern-ndsp-v21
+          name: picodrive3ds-modern-ndsp-v21b
           path: artifacts/*
           if-no-files-found: error
