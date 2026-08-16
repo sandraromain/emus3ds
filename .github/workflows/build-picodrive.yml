@@ -23,7 +23,7 @@ jobs:
           git apply --check picodrive3ds_ram_cheats_fix.patch
           git apply picodrive3ds_ram_cheats_fix.patch
 
-      - name: Apply v21b modern runtime fixes
+      - name: Apply v21c modern runtime fixes
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -331,15 +331,15 @@ jobs:
           chmod +x makerom/linux_x86_64/makerom || true
           make -f picodrive-make
 
-      - name: Verify v21b binary and source
+      - name: Verify v21c binary and source
         run: |
           "$DEVKITARM/bin/arm-none-eabi-nm" -C picodrive_3ds.elf | grep "video3dsClearAllSoftwareBuffers"
           grep -q -- "-DEMU_RELEASE" picodrive-make
           grep -q "ndspInit" src/3ds/3dssound.cpp
           grep -q "NDSP_FORMAT_STEREO_PCM16" src/3ds/3dssound.cpp
           grep -q "snd3dsMixSamples();" src/3ds/3dsmain.cpp
-          grep -q "Modern libctru" src/3ds/3dsmain.cpp
-          echo "v21b modern runtime fixes verified"
+          grep -q "automatic service shutdown" src/3ds/3dsmain.cpp
+          echo "v21c modern runtime fixes verified"
 
       - name: Collect build output
         run: |
@@ -352,6 +352,6 @@ jobs:
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: picodrive3ds-modern-ndsp-v21b
+          name: picodrive3ds-modern-ndsp-v21c
           path: artifacts/*
           if-no-files-found: error
